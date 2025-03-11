@@ -2,20 +2,6 @@ const createOverlay = async (experiments) => {
     const overlay = document.createElement('div');
     overlay.className = 'vwo-overlay vwo-minimized';
   
-    // Minimized view
-    const minimizedView = document.createElement('div');
-    minimizedView.innerHTML = `
-      <div style="display: flex; align-items: center; gap: 8px;">
-        <span style="font-weight: bold;">VWO</span>
-        <span>${experiments.length} active</span>
-      </div>
-    `;
-  
-    // Expanded view
-    const expandedView = document.createElement('div');
-    expandedView.className = 'vwo-expanded';
-    expandedView.style.display = 'none';
-  
     const experimentMap = new Map(); // To ensure unique experiments
   
     for (const exp of experiments) {
@@ -24,6 +10,20 @@ const createOverlay = async (experiments) => {
         experimentMap.set(testId, exp);
       }
     }
+  
+    // Minimized view
+    const minimizedView = document.createElement('div');
+    minimizedView.innerHTML = `
+      <div style="display: flex; align-items: center; gap: 8px;">
+        <span style="font-weight: bold;">VWO</span>
+        <span>${experimentMap.size} active</span>
+      </div>
+    `;
+  
+    // Expanded view
+    const expandedView = document.createElement('div');
+    expandedView.className = 'vwo-expanded';
+    expandedView.style.display = 'none';
   
     for (const [testId, exp] of experimentMap.entries()) {
       const experimentName = await getExperimentName(testId); // Fetch the experiment name dynamically
