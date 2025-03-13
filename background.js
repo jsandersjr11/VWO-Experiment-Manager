@@ -15,8 +15,8 @@ async function updateBadge() {
         type: 'block'
       },
       condition: {
-        urlFilter: '*://dev.visualwebsiteoptimizer.com/*',
-        resourceTypes: ['xmlhttprequest', 'script', 'image', 'other']
+        urlFilter: '*://dev.visualwebsiteoptimizer.com/t13n*',
+        resourceTypes: ['xmlhttprequest', 'script']
       }
     }]
   });

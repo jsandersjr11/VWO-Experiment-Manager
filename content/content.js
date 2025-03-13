@@ -142,17 +142,38 @@ const createOverlay = async (experiments) => {
     return colors[value % colors.length];
   }
   
-  // Send message to background script to check for VWO cookies
+  // Add debugging to help track the flow
   function checkForVWOCookies() {
-    chrome.runtime.sendMessage({ action: "checkVWOCookies", url: window.location.href }, 
-      response => {
-        if (response && response.experiments && response.experiments.length > 0) {
-          createOverlay(response.experiments);
+    console.log('Checking for VWO cookies...');
+    chrome.runtime.sendMessage(
+        { 
+            action: "checkVWOCookies", 
+            url: window.location.origin // Changed from location.href to ensure correct cookie domain
+        }, 
+        response => {
+            console.log('Received response:', response);
+            if (response && response.experiments && response.experiments.length > 0) {
+                console.log('Found VWO experiments:', response.experiments);
+                createOverlay(response.experiments);
+            } else {
+                console.log('No VWO experiments found');
+            }
         }
-      }
     );
   }
 
-  // Check for cookies when page loads
-  checkForVWOCookies();
+  // Ensure the check runs after the page is fully loaded
+  document.addEventListener('DOMContentLoaded', () => {
+    checkForVWOCookies();
+  });
+
+  // Also check when the page state changes (for SPAs)
+  let lastUrl = location.href;
+  new MutationObserver(() => {
+    const url = location.href;
+    if (url !== lastUrl) {
+        lastUrl = url;
+        checkForVWOCookies();
+    }
+  }).observe(document, { subtree: true, childList: true });
   
