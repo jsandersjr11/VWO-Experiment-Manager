@@ -2,16 +2,126 @@
 <html>
 <head>
   <style>
-    body { width: 300px; padding: 10px; }
-    .experiment { margin: 10px 0; }
+    body {
+      width: 320px;
+      padding: 16px;
+      margin: 0;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+      color: #333;
+    }
+
+    /* Header */
+    .header {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 16px;
+      padding-bottom: 12px;
+      border-bottom: 1px solid #eee;
+    }
+
+    .header img {
+      width: 24px;
+      height: 24px;
+    }
+
+    .header h1 {
+      margin: 0;
+      font-size: 16px;
+      font-weight: 600;
+    }
+
+    /* Experiments */
+    .experiment {
+      margin: 12px 0;
+      padding: 12px;
+      background: #f8f9fa;
+      border: 1px solid #e9ecef;
+      border-radius: 6px;
+      transition: all 0.2s;
+    }
+
+    .experiment:hover {
+      border-color: #dee2e6;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+    }
+
+    .experiment h4 {
+      margin: 0 0 12px 0;
+      font-size: 14px;
+      font-weight: 600;
+      color: #2c3e50;
+    }
+
+    /* Form Controls */
+    .variation-select {
+      flex: 1;
+      padding: 8px 12px;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      background: #fff;
+      font-size: 13px;
+      color: #333;
+      cursor: pointer;
+      transition: border-color 0.2s;
+    }
+
+    .variation-select:hover,
+    .variation-select:focus {
+      border-color: #2196F3;
+      outline: none;
+    }
+
+    /* Links */
+    .view-report {
+      padding: 6px 8px;
+      color: #2196F3;
+      text-decoration: none;
+      font-size: 13px;
+      border-radius: 4px;
+      transition: all 0.2s;
+    }
+
+    .view-report:hover {
+      background: #e3f2fd;
+    }
+
+    /* Toggle Button */
+    #disableTracking {
+      width: 100%;
+      padding: 10px 16px;
+      margin-top: 16px;
+      border: none;
+      border-radius: 4px;
+      font-size: 14px;
+      font-weight: 500;
+      color: white;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    #disableTracking:hover {
+      filter: brightness(0.95);
+    }
+
+    /* Empty State */
+    .empty-state {
+      text-align: center;
+      color: #666;
+      padding: 24px 16px;
+      background: #f8f9fa;
+      border-radius: 6px;
+      font-size: 14px;
+    }
   </style>
 </head>
 <body>
-    <div style="margin-top:20px;">
-        <a href="../settings/settings.html" target="_blank" style="color:#3498db;">Configure VWO API Key →</a>
-      </div>      
+  <div class="header">
+    <img src="../icons/icon48.png" alt="VWO">
+    <h1>VWO Experiment Manager</h1>
+  </div>
   <div id="experiments"></div>
-  <button id="disableTracking">Toggle Tracking</button>
+  <button id="disableTracking">Toggle VWO Tracking</button>
   <script src="popup.js"></script>
 </body>
 </html>

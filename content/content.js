@@ -1,158 +1,194 @@
-const createOverlay = async (experiments) => {
-    const overlay = document.createElement('div');
-    overlay.className = 'vwo-overlay vwo-minimized';
-  
-    const experimentMap = new Map(); // To ensure unique experiments
-  
-    for (const exp of experiments) {
-      const testId = exp.name.split('_')[4];
-      if (!experimentMap.has(testId)) {
-        experimentMap.set(testId, exp);
-      }
-    }
-  
-    // Minimized view
-    const minimizedView = document.createElement('div');
-    minimizedView.innerHTML = `
-      <div style="display: flex; align-items: center; gap: 8px;">
-        <span style="font-weight: bold;">VWO</span>
-        <span>${experimentMap.size} active</span>
-      </div>
-    `;
-  
-    // Expanded view
-    const expandedView = document.createElement('div');
-    expandedView.className = 'vwo-expanded';
-    expandedView.style.display = 'none';
-  
-    for (const [testId, exp] of experimentMap.entries()) {
-      const experimentName = await getExperimentName(testId); // Fetch the experiment name dynamically
-      const variationCount = await getVariationCount(testId); // Fetch the actual number of variations
-      const currentVariation = parseInt(exp.value, 10); // Current variation assigned by VWO
-  
-      const expDiv = document.createElement('div');
-      expDiv.className = 'experiment-item';
-      expDiv.innerHTML = `
-        <div style="margin-bottom: 8px;">
-          <span class="variation-indicator" style="background: ${getVariationColor(currentVariation)}"></span>
-          <strong>${experimentName || `Test ${testId}`}:</strong> Variation ${currentVariation}
-        </div>
-        <select class="variation-select" data-name="${exp.name}">
-          ${Array.from({ length: variationCount }, (_, i) =>
-            `<option value="${i + 1}" ${currentVariation === i + 1 ? 'selected' : ''}>
-              Variation ${i + 1}
-            </option>`
-          ).join('')}
-        </select>
-        <button class="disable-exp" data-name="${exp.name}" style="margin-left:10px;">Turn Off</button>
-        <a class="vwo-link"
-           href="https://app.vwo.com/#/test/ab/${testId}/report"
-           target="_blank"
-           rel="noopener">
-          Open in VWO →
-        </a>
-      `;
-      expandedView.appendChild(expDiv);
-    }
-  
-    // Toggle functionality
-    minimizedView.addEventListener('click', () => {
-      expandedView.style.display = expandedView.style.display === 'none' ? 'block' : 'none';
-      overlay.className =
-        expandedView.style.display === 'none'
-          ? 'vwo-overlay vwo-minimized'
-          : 'vwo-overlay vwo-expanded';
-    });
-  
-    overlay.appendChild(minimizedView);
-    overlay.appendChild(expandedView);
-    document.body.appendChild(overlay);
-  
-    // Add event listeners for variation switching and disabling experiments
-    document.querySelectorAll('.variation-select').forEach((select) => {
-      select.addEventListener('change', async (e) => {
-        await chrome.cookies.set({
-          url: window.location.origin,
-          name: e.target.dataset.name,
-          value: e.target.value,
-        });
-        window.location.reload();
-      });
-    });
-  
-    document.querySelectorAll('.disable-exp').forEach((button) => {
-      button.addEventListener('click', async (e) => {
-        await chrome.cookies.remove({
-          url: window.location.origin,
-          name: e.target.dataset.name,
-        });
-        window.location.reload();
-      });
-    });
-  };
-  
-  // Fetch experiment name dynamically using VWO API or fallback to test ID
-  async function getExperimentName(testId) {
-    const apiKey = await getApiKey();
-    if (!apiKey) return `Test ${testId}`;
-  
-    try {
-      const response = await fetch(`https://app.vwo.com/api/v1/tests/${testId}`, {
-        headers: { Authorization: `Bearer ${apiKey}` },
-      });
-      if (response.ok) {
-        const data = await response.json();
-        return data.name || `Test ${testId}`;
-      }
-      return `Test ${testId}`;
-    } catch (error) {
-      console.error('Failed to fetch experiment name:', error);
-      return `Test ${testId}`;
-    }
-  }
-  
-  async function getVariationCount(testId) {
-    const apiKey = await getApiKey();
-    if (!apiKey) return 2; // Default to Control + Variation
-  
-    try {
-      const response = await fetch(`https://app.vwo.com/api/v1/tests/${testId}`, {
-        headers: { Authorization: `Bearer ${apiKey}` },
-      });
-      if (response.ok) {
-        const data = await response.json();
-        return data.variations.length; // Total number of variations in the experiment
-      }
-      return 2; // Default to Control + Variation if API fails
-    } catch (error) {
-      console.error('Failed to fetch variation count:', error);
-      return 2; // Default to Control + Variation if API fails
-    }
-  }
-  
-  async function getApiKey() {
-    return new Promise((resolve) => {
-      chrome.storage.sync.get(['vwoApiKey'], (result) => resolve(result.vwoApiKey));
-    });
-  }
-  
-  
-  function getVariationColor(value) {
-    const colors = ['#E74C3C', '#2ECC71', '#3498DB', '#F1C40F'];
-    return colors[value % colors.length];
-  }
-  
-  // Send message to background script to check for VWO cookies
-  function checkForVWOCookies() {
-    chrome.runtime.sendMessage({ action: "checkVWOCookies", url: window.location.href }, 
-      response => {
-        if (response && response.experiments && response.experiments.length > 0) {
-          createOverlay(response.experiments);
-        }
-      }
-    );
+// VWO API endpoints
+const VWO_API_BASE = 'https://app.vwo.com/api/v2';
+
+// UI Constants
+const UI_COLORS = {
+  control: '#2196F3',
+  variation: '#4CAF50',
+  disabled: '#9E9E9E',
+  hover: '#1976D2'
+};
+
+class VWOManager {
+  constructor() {
+    this.apiKey = null;
+    this.experiments = new Map();
+    this.overlay = null;
+    this.initialized = false;
   }
 
-  // Check for cookies when page loads
-  checkForVWOCookies();
-  
+  async init() {
+    if (this.initialized) return;
+    
+    this.apiKey = await this.getApiKey();
+    await this.fetchExperiments();
+    
+    if (this.experiments.size > 0) {
+      this.createOverlay();
+    }
+    
+    this.initialized = true;
+  }
+
+  async getApiKey() {
+    return 'd0914962ef2b552363166068cb4d1c10557f5fbb9ba87ef6597d80dc8c949898';
+  }
+
+  async fetchExperiments() {
+    const response = await chrome.runtime.sendMessage({
+      action: 'getExperiments',
+      url: window.location.href
+    });
+
+    if (response?.experiments) {
+      for (const exp of response.experiments) {
+        const testId = exp.testId;
+        if (!this.experiments.has(testId)) {
+          const details = await this.fetchExperimentDetails(testId);
+          this.experiments.set(testId, {
+            ...exp,
+            ...details
+          });
+        }
+      }
+    }
+  }
+
+  async fetchExperimentDetails(testId) {
+    if (!this.apiKey) return { name: `Test ${testId}`, variations: [0, 1] };
+
+    try {
+      const response = await fetch(`${VWO_API_BASE}/experiments/${testId}`, {
+        headers: { Authorization: `Bearer ${this.apiKey}` }
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        return {
+          name: data.name,
+          variations: data.variations.map(v => ({
+            id: v.id,
+            name: v.name,
+            weight: v.weight
+          }))
+        };
+      }
+    } catch (error) {
+      console.warn(`Failed to fetch experiment ${testId} details:`, error);
+    }
+
+    return { name: `Test ${testId}`, variations: [0, 1] };
+  }
+
+  createOverlay() {
+    this.overlay = document.createElement('div');
+    this.overlay.className = 'vwo-overlay vwo-minimized';
+    
+    const minimizedView = this.createMinimizedView();
+    const expandedView = this.createExpandedView();
+    
+    this.overlay.appendChild(minimizedView);
+    this.overlay.appendChild(expandedView);
+    document.body.appendChild(this.overlay);
+  }
+
+  createMinimizedView() {
+    const view = document.createElement('div');
+    view.className = 'vwo-minimized-view';
+    view.innerHTML = `
+      <div class="vwo-header">
+        <img src="${chrome.runtime.getURL('icons/icon16.png')}" alt="VWO" />
+        <span>${this.experiments.size} Active Tests</span>
+      </div>
+    `;
+
+    view.addEventListener('click', () => this.toggleOverlay());
+    return view;
+  }
+
+  createExpandedView() {
+    const view = document.createElement('div');
+    view.className = 'vwo-expanded-view';
+    
+    for (const [testId, exp] of this.experiments) {
+      view.appendChild(this.createExperimentCard(testId, exp));
+    }
+
+    return view;
+  }
+
+  createExperimentCard(testId, exp) {
+    const card = document.createElement('div');
+    card.className = 'vwo-experiment-card';
+    
+    const variationOptions = exp.variations.map((v, i) => `
+      <option value="${v.id}" ${exp.variationId === v.id ? 'selected' : ''}>
+        ${v.name || `Variation ${i}`}
+      </option>
+    `).join('');
+
+    card.innerHTML = `
+      <div class="vwo-exp-header">
+        <h3>${exp.name}</h3>
+        <div class="vwo-exp-actions">
+          <select class="vwo-variation-select" data-test-id="${testId}">
+            ${variationOptions}
+          </select>
+          <button class="vwo-disable-btn" data-test-id="${testId}" title="Turn off experiment">
+            ⏻
+          </button>
+          <a href="https://app.vwo.com/#/test/${testId}/report" 
+             target="_blank" 
+             class="vwo-dashboard-link"
+             title="Open in VWO Dashboard">
+            ↗️
+          </a>
+        </div>
+      </div>
+    `;
+
+    this.attachExperimentListeners(card, testId);
+    return card;
+  }
+
+  attachExperimentListeners(card, testId) {
+    const select = card.querySelector('.vwo-variation-select');
+    const disableBtn = card.querySelector('.vwo-disable-btn');
+
+    select?.addEventListener('change', (e) => {
+      this.setVariation(testId, parseInt(e.target.value, 10));
+    });
+
+    disableBtn?.addEventListener('click', () => {
+      this.removeExperiment(testId);
+    });
+  }
+
+  async setVariation(testId, variationId) {
+    await chrome.runtime.sendMessage({
+      action: 'setVariation',
+      url: window.location.href,
+      testId,
+      variationId
+    });
+    window.location.reload();
+  }
+
+  async removeExperiment(testId) {
+    await chrome.runtime.sendMessage({
+      action: 'removeExperiment',
+      url: window.location.href,
+      testId
+    });
+    window.location.reload();
+  }
+
+  toggleOverlay() {
+    const isMinimized = this.overlay.classList.contains('vwo-minimized');
+    this.overlay.className = `vwo-overlay ${isMinimized ? 'vwo-expanded' : 'vwo-minimized'}`;
+  }
+}
+
+// Initialize VWO Manager
+const vwoManager = new VWOManager();
+vwoManager.init();

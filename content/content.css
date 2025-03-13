@@ -1,46 +1,167 @@
+/* VWO Overlay Base Styles */
 .vwo-overlay {
-    position: fixed;
-    top: 50%;
-    right: 0;
-    transform: translateY(-50%);
-    z-index: 9999;
-    font-family: Arial, sans-serif;
-  }
-  
-  .vwo-minimized {
-    background: #2C3E50;
-    color: white;
-    padding: 10px;
-    border-radius: 5px 0 0 5px;
-    cursor: pointer;
-    box-shadow: -2px 2px 10px rgba(0,0,0,0.2);
-  }
-  
-  .vwo-expanded {
-    background: white;
-    width: 300px;
-    border-radius: 5px 0 0 5px;
-    box-shadow: -2px 2px 15px rgba(0,0,0,0.3);
-  }
-  
-  .experiment-item {
-    padding: 15px;
-    border-bottom: 1px solid #eee;
-  }
-  
-  .vwo-link {
-    color: #3498db;
-    text-decoration: none;
-    font-size: 0.9em;
-    display: block;
-    margin-top: 5px;
-  }
-  
-  .variation-indicator {
-    width: 12px;
-    height: 12px;
-    border-radius: 50%;
-    display: inline-block;
-    margin-right: 8px;
-  }
-  
+  position: fixed;
+  bottom: 20px;
+  right: 20px;
+  background: #fff;
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  z-index: 999999;
+  transition: all 0.3s ease;
+  max-width: 400px;
+  min-width: 200px;
+}
+
+/* Minimized State */
+.vwo-overlay.vwo-minimized {
+  width: auto;
+  cursor: pointer;
+}
+
+.vwo-overlay.vwo-minimized .vwo-expanded-view {
+  display: none;
+}
+
+.vwo-minimized-view {
+  padding: 12px 16px;
+}
+
+.vwo-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.vwo-header img {
+  width: 16px;
+  height: 16px;
+}
+
+.vwo-header span {
+  font-weight: 500;
+  color: #333;
+}
+
+/* Expanded State */
+.vwo-overlay.vwo-expanded {
+  width: 360px;
+}
+
+.vwo-overlay.vwo-expanded .vwo-minimized-view {
+  border-bottom: 1px solid #eee;
+}
+
+.vwo-expanded-view {
+  max-height: calc(100vh - 200px);
+  overflow-y: auto;
+  padding: 16px;
+  display: none;
+}
+
+.vwo-overlay.vwo-expanded .vwo-expanded-view {
+  display: block;
+}
+
+/* Experiment Cards */
+.vwo-experiment-card {
+  background: #f8f9fa;
+  border-radius: 6px;
+  padding: 16px;
+  margin-bottom: 12px;
+}
+
+.vwo-experiment-card:last-child {
+  margin-bottom: 0;
+}
+
+.vwo-exp-header {
+  margin-bottom: 12px;
+}
+
+.vwo-exp-header h3 {
+  margin: 0 0 12px 0;
+  font-size: 14px;
+  color: #333;
+  font-weight: 600;
+}
+
+.vwo-exp-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* Form Controls */
+.vwo-variation-select {
+  flex: 1;
+  padding: 8px 12px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  background: #fff;
+  font-size: 13px;
+  color: #333;
+  cursor: pointer;
+  transition: border-color 0.2s;
+}
+
+.vwo-variation-select:hover,
+.vwo-variation-select:focus {
+  border-color: #2196F3;
+  outline: none;
+}
+
+/* Buttons */
+.vwo-disable-btn,
+.vwo-dashboard-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: #666;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.vwo-disable-btn:hover {
+  background: #fee2e2;
+  color: #dc2626;
+}
+
+.vwo-dashboard-link {
+  text-decoration: none;
+}
+
+.vwo-dashboard-link:hover {
+  background: #e8f4fd;
+  color: #2196F3;
+}
+
+/* Button Icons */
+.vwo-disable-btn,
+.vwo-dashboard-link {
+  font-size: 16px;
+  line-height: 1;
+}
+
+/* Scrollbar Styles */
+.vwo-expanded-view::-webkit-scrollbar {
+  width: 6px;
+}
+
+.vwo-expanded-view::-webkit-scrollbar-track {
+  background: #f1f1f1;
+  border-radius: 3px;
+}
+
+.vwo-expanded-view::-webkit-scrollbar-thumb {
+  background: #ccc;
+  border-radius: 3px;
+}
+
+.vwo-expanded-view::-webkit-scrollbar-thumb:hover {
+  background: #999;
+}
