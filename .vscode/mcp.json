@@ -1,0 +1,9 @@
+{
+	"servers": {
+		"VWO": {
+			"url": "https://mcp.vwo.io/mcp?key=fc0d315bbe7ab2265f40e8ab131845bc38640f5bf95d4f2a501e71fa9daf95a1",
+			"type": "http"
+		}
+	},
+	"inputs": []
+}

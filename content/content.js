@@ -192,3 +192,21 @@ class VWOManager {
 // Initialize VWO Manager
 const vwoManager = new VWOManager();
 vwoManager.init();
+
+// content/injected.js
+
+function findVWOData() {
+  if (window.VWO) {
+      //VWO is present on page
+      const vwoData = {
+        vwo: window.VWO,
+        experiments: window.VWO._.runningExperiments,
+      };
+
+      return vwoData;
+  } else {
+    return null;
+  }
+}
+
+findVWOData();

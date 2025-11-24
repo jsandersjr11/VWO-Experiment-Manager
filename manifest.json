@@ -6,11 +6,13 @@
   "permissions": [
     "cookies",
     "scripting",
-    "activeTab"
+    "activeTab",
+    "storage"
   ],
   "host_permissions": [
     "*://*/*",
-    "https://app.vwo.com/*"
+    "https://app.vwo.com/*",
+    "https://*.visualwebsiteoptimizer.com/*"
   ],
   "background": {
     "service_worker": "background.js"
@@ -30,13 +32,18 @@
     "48": "icons/icon48.png",
     "128": "icons/icon128.png"
   },
-  "content_scripts": [{
-    "matches": ["*://*/*"],
-    "css": ["content/content.css"],
-    "js": ["content/content.js"]
-  }],
-  "web_accessible_resources": [{
-    "resources": ["icons/*"],
-    "matches": ["*://*/*"]
-  }]
+  "content_scripts": [
+    {
+      "matches": ["*://*/*"],
+      "css": ["content/content.css"],
+      "js": ["content/content.js"],
+      "run_at": "document_idle"
+    }
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": ["icons/*", "content/injected.js"],
+      "matches": ["*://*/*"]
+    }
+  ]
 }
