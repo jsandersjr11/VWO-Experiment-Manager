@@ -6,29 +6,51 @@ import DashboardHeader from "@/components/DashboardHeader";
 import MetricsSummary from "@/components/MetricsSummary";
 import ExperimentCard from "@/components/ExperimentCard";
 import ExperimentChart from "@/components/ExperimentChart";
+import TabNavigation from "@/components/TabNavigation";
+import Sidebar from "@/components/Sidebar";
+import { FlaskConical } from "lucide-react";
+
+type TabStatus = "RUNNING" | "DRAFT" | "PAUSED";
 
 export default function DashboardPage() {
-  const [experiments, setExperiments] = useState<any[]>([]);
-  const [lastUpdate, setLastUpdate] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<TabStatus>("RUNNING");
+  const [experiments, setExperiments] = useState<Record<TabStatus, any[]>>({
+    RUNNING: [],
+    DRAFT: [],
+    PAUSED: [],
+  });
+  const [lastUpdate, setLastUpdate] = useState<Record<TabStatus, string | null>>({
+    RUNNING: null,
+    DRAFT: null,
+    PAUSED: null,
+  });
+  const [loadedTabs, setLoadedTabs] = useState<Set<TabStatus>>(new Set());
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [autoRefreshEnabled, setAutoRefreshEnabled] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<"cards" | "charts">("cards");
 
-  const fetchExperiments = async () => {
+  const fetchExperiments = async (status: TabStatus) => {
     try {
       setIsRefreshing(true);
       setError(null);
 
-      const response = await fetch("/api/experiments");
+      const response = await fetch(`/api/experiments?status=${status}`);
 
       if (!response.ok) {
         throw new Error(`Failed to fetch experiments: ${response.statusText}`);
       }
 
       const data = await response.json();
-      setExperiments(data.experiments || []);
-      setLastUpdate(data.lastUpdate);
+      setExperiments((prev) => ({
+        ...prev,
+        [status]: data.experiments || [],
+      }));
+      setLastUpdate((prev) => ({
+        ...prev,
+        [status]: data.lastUpdate,
+      }));
+      setLoadedTabs((prev) => new Set(prev).add(status));
     } catch (err: any) {
       console.error("Error fetching experiments:", err);
       setError(err.message || "Failed to load experiments");
@@ -38,114 +60,146 @@ export default function DashboardPage() {
   };
 
   const handleRefresh = async () => {
-    await fetchExperiments();
+    await fetchExperiments(activeTab);
   };
 
   const handleToggleAutoRefresh = () => {
     setAutoRefreshEnabled(!autoRefreshEnabled);
   };
 
-  // Initial fetch
+  const handleTabChange = (tab: TabStatus) => {
+    setActiveTab(tab);
+    // Lazy load: only fetch if tab hasn't been loaded yet
+    if (!loadedTabs.has(tab)) {
+      fetchExperiments(tab);
+    }
+  };
+
+  // Initial fetch for Running tab
   useEffect(() => {
-    fetchExperiments();
+    fetchExperiments("RUNNING");
   }, []);
 
-  // Auto-refresh
+  // Auto-refresh (only for Running tab)
   useEffect(() => {
-    if (!autoRefreshEnabled) return;
+    if (!autoRefreshEnabled || activeTab !== "RUNNING") return;
 
     const interval = setInterval(() => {
-      fetchExperiments();
-    }, parseInt(process.env.NEXT_PUBLIC_REFRESH_INTERVAL || "300000")); // Default 5 minutes
+      fetchExperiments("RUNNING");
+    }, parseInt(process.env.NEXT_PUBLIC_REFRESH_INTERVAL || "300000"));
 
     return () => clearInterval(interval);
-  }, [autoRefreshEnabled]);
+  }, [autoRefreshEnabled, activeTab]);
+
+  const currentExperiments = experiments[activeTab];
+  const currentLastUpdate = lastUpdate[activeTab];
 
   return (
     <SessionProvider>
-      <div className="min-h-screen bg-gradient-to-br from-gray-900 via-blue-900/20 to-purple-900/20">
-        <DashboardHeader
-          lastUpdate={lastUpdate}
-          onRefresh={handleRefresh}
-          isRefreshing={isRefreshing}
-          autoRefreshEnabled={autoRefreshEnabled}
-          onToggleAutoRefresh={handleToggleAutoRefresh}
-        />
+      <div className="flex min-h-screen bg-gray-50">
+        <Sidebar />
 
-        <main className="container mx-auto px-6 py-8">
-          {error && (
-            <div className="glass-panel p-4 mb-6 border-red-500/50 bg-red-500/10">
-              <p className="text-red-400">{error}</p>
-            </div>
-          )}
+        <div className="flex-1 flex flex-col min-w-0">
+          <DashboardHeader
+            lastUpdate={currentLastUpdate}
+            onRefresh={handleRefresh}
+            isRefreshing={isRefreshing}
+            autoRefreshEnabled={autoRefreshEnabled}
+            onToggleAutoRefresh={handleToggleAutoRefresh}
+            showAutoRefresh={activeTab === "RUNNING"}
+          />
 
-          {experiments.length > 0 && (
-            <>
-              <MetricsSummary experiments={experiments} />
+          <main className="flex-1 p-8 overflow-y-auto">
+            {/* Tab Navigation */}
+            <TabNavigation
+              activeTab={activeTab}
+              onTabChange={handleTabChange}
+              counts={{
+                RUNNING: experiments.RUNNING.length,
+                DRAFT: experiments.DRAFT.length,
+                PAUSED: experiments.PAUSED.length,
+              }}
+            />
 
-              {/* View mode toggle */}
-              <div className="flex items-center justify-between mb-6">
-                <h2 className="text-2xl font-bold text-white">
-                  Experiments ({experiments.length})
-                </h2>
-                <div className="flex gap-2">
-                  <button
-                    onClick={() => setViewMode("cards")}
-                    className={`px-4 py-2 rounded-lg transition-all ${viewMode === "cards"
-                        ? "bg-blue-500 text-white"
-                        : "bg-white/10 text-gray-300 hover:bg-white/20"
-                      }`}
-                  >
-                    Cards
-                  </button>
-                  <button
-                    onClick={() => setViewMode("charts")}
-                    className={`px-4 py-2 rounded-lg transition-all ${viewMode === "charts"
-                        ? "bg-blue-500 text-white"
-                        : "bg-white/10 text-gray-300 hover:bg-white/20"
-                      }`}
-                  >
-                    Charts
-                  </button>
-                </div>
+            {error && (
+              <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-6">
+                <p className="text-red-600 text-sm">{error}</p>
               </div>
+            )}
 
-              {/* Experiments display */}
-              {viewMode === "cards" ? (
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                  {experiments.map((experiment) => (
-                    <ExperimentCard
-                      key={experiment.id}
-                      experiment={experiment}
-                    />
-                  ))}
+            {currentExperiments.length > 0 && (
+              <>
+                {/* View mode toggle - Hidden for now to match Stax design which is card-focused */}
+                {/* 
+                <div className="flex items-center justify-end mb-6">
+                  <div className="flex gap-2 bg-white p-1 rounded-lg border border-gray-200">
+                    <button
+                      onClick={() => setViewMode("cards")}
+                      className={`px-3 py-1.5 rounded-md text-sm font-medium transition-all ${
+                        viewMode === "cards"
+                          ? "bg-indigo-50 text-indigo-600"
+                          : "text-gray-500 hover:text-gray-700"
+                      }`}
+                    >
+                      Cards
+                    </button>
+                    <button
+                      onClick={() => setViewMode("charts")}
+                      className={`px-3 py-1.5 rounded-md text-sm font-medium transition-all ${
+                        viewMode === "charts"
+                          ? "bg-indigo-50 text-indigo-600"
+                          : "text-gray-500 hover:text-gray-700"
+                      }`}
+                    >
+                      Charts
+                    </button>
+                  </div>
                 </div>
-              ) : (
-                <div className="space-y-6">
-                  {experiments.map((experiment) => (
-                    <ExperimentChart
-                      key={experiment.id}
-                      experiment={experiment}
-                    />
-                  ))}
+                */}
+
+                {/* Experiments display */}
+                {viewMode === "cards" ? (
+                  <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+                    {currentExperiments.map((experiment) => (
+                      <ExperimentCard
+                        key={experiment.id}
+                        experiment={experiment}
+                      />
+                    ))}
+                  </div>
+                ) : (
+                  <div className="space-y-6">
+                    {currentExperiments.map((experiment) => (
+                      <ExperimentChart
+                        key={experiment.id}
+                        experiment={experiment}
+                      />
+                    ))}
+                  </div>
+                )}
+              </>
+            )}
+
+            {!error && currentExperiments.length === 0 && !isRefreshing && (
+              <div className="flex flex-col items-center justify-center py-20 text-center">
+                <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mb-4">
+                  <FlaskConical className="w-8 h-8 text-gray-400" />
                 </div>
-              )}
-            </>
-          )}
+                <h3 className="text-lg font-medium text-gray-900 mb-1">No experiments found</h3>
+                <p className="text-gray-500 max-w-sm">
+                  There are no {activeTab.toLowerCase()} experiments to display at the moment.
+                </p>
+              </div>
+            )}
 
-          {!error && experiments.length === 0 && !isRefreshing && (
-            <div className="glass-panel p-12 text-center">
-              <p className="text-gray-400">No experiments found</p>
-            </div>
-          )}
-
-          {isRefreshing && experiments.length === 0 && (
-            <div className="glass-panel p-12 text-center">
-              <div className="animate-spin w-12 h-12 border-4 border-blue-500 border-t-transparent rounded-full mx-auto mb-4"></div>
-              <p className="text-gray-400">Loading experiments...</p>
-            </div>
-          )}
-        </main>
+            {isRefreshing && currentExperiments.length === 0 && (
+              <div className="flex flex-col items-center justify-center py-20">
+                <div className="animate-spin w-10 h-10 border-4 border-indigo-600 border-t-transparent rounded-full mb-4"></div>
+                <p className="text-gray-500 font-medium">Loading experiments...</p>
+              </div>
+            )}
+          </main>
+        </div>
       </div>
     </SessionProvider>
   );

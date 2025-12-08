@@ -1,7 +1,6 @@
 "use client";
 
-import { signOut, useSession } from "next-auth/react";
-import { RefreshCw } from "lucide-react";
+import { RefreshCw, Search, Plus, MoreVertical } from "lucide-react";
 
 interface DashboardHeaderProps {
     lastUpdate: string | null;
@@ -9,6 +8,7 @@ interface DashboardHeaderProps {
     isRefreshing: boolean;
     autoRefreshEnabled: boolean;
     onToggleAutoRefresh: () => void;
+    showAutoRefresh?: boolean;
 }
 
 export default function DashboardHeader({
@@ -17,72 +17,75 @@ export default function DashboardHeader({
     isRefreshing,
     autoRefreshEnabled,
     onToggleAutoRefresh,
+    showAutoRefresh = true,
 }: DashboardHeaderProps) {
-    const { data: session } = useSession();
-
     return (
-        <header className="glass-panel sticky top-0 z-50 border-b border-white/10">
-            <div className="container mx-auto px-6 py-4">
+        <header className="bg-white border-b border-gray-200 sticky top-0 z-40">
+            <div className="px-8 py-4">
+                <div className="flex items-center justify-between mb-4">
+                    <h1 className="text-2xl font-bold text-gray-900">
+                        Experiment Gallery
+                    </h1>
+                    <div className="flex items-center gap-3">
+                        {/* Search Bar */}
+                        <div className="relative">
+                            <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                            <input
+                                type="text"
+                                placeholder="Search Experiment"
+                                className="pl-9 pr-4 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 w-64"
+                            />
+                        </div>
+
+                        {/* Add Button */}
+                        <button className="flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-sm font-medium transition-colors shadow-sm">
+                            <Plus className="w-4 h-4" />
+                            Add experiment
+                        </button>
+
+                        {/* Menu */}
+                        <button className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-50 rounded-lg transition-colors">
+                            <MoreVertical className="w-5 h-5" />
+                        </button>
+                    </div>
+                </div>
+
                 <div className="flex items-center justify-between">
-                    <div>
-                        <h1 className="text-3xl font-bold bg-gradient-to-r from-blue-400 to-purple-500 bg-clip-text text-transparent">
-                            VWO Performance Dashboard
-                        </h1>
-                        {lastUpdate && (
-                            <p className="text-sm text-gray-400 mt-1">
-                                Last updated: {new Date(lastUpdate).toLocaleString()}
-                            </p>
-                        )}
+                    <div className="flex items-center gap-4">
+                        {/* Tabs will go here in the parent component, or we can move them here if we want header to contain tabs */}
                     </div>
 
                     <div className="flex items-center gap-4">
+                        {lastUpdate && (
+                            <p className="text-xs text-gray-500">
+                                Updated: {new Date(lastUpdate).toLocaleTimeString()}
+                            </p>
+                        )}
+
                         {/* Auto-refresh toggle */}
-                        <label className="flex items-center gap-2 cursor-pointer">
-                            <input
-                                type="checkbox"
-                                checked={autoRefreshEnabled}
-                                onChange={onToggleAutoRefresh}
-                                className="w-4 h-4 rounded accent-blue-500"
-                            />
-                            <span className="text-sm text-gray-300">Auto-refresh</span>
-                        </label>
+                        {showAutoRefresh && (
+                            <label className="flex items-center gap-2 cursor-pointer">
+                                <input
+                                    type="checkbox"
+                                    checked={autoRefreshEnabled}
+                                    onChange={onToggleAutoRefresh}
+                                    className="w-3.5 h-3.5 rounded accent-indigo-600"
+                                />
+                                <span className="text-xs font-medium text-gray-600">Auto-refresh</span>
+                            </label>
+                        )}
 
                         {/* Manual refresh button */}
                         <button
                             onClick={onRefresh}
                             disabled={isRefreshing}
-                            className="btn-primary flex items-center gap-2"
+                            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-gray-600 bg-white border border-gray-200 rounded-md hover:bg-gray-50 transition-colors disabled:opacity-50"
                         >
                             <RefreshCw
-                                className={`w-4 h-4 ${isRefreshing ? "animate-spin" : ""}`}
+                                className={`w-3.5 h-3.5 ${isRefreshing ? "animate-spin" : ""}`}
                             />
                             Refresh
                         </button>
-
-                        {/* User info and sign out */}
-                        {session?.user && (
-                            <div className="flex items-center gap-3">
-                                <div className="text-right">
-                                    <p className="text-sm font-medium text-white">
-                                        {session.user.name}
-                                    </p>
-                                    <p className="text-xs text-gray-400">{session.user.email}</p>
-                                </div>
-                                {session.user.image && (
-                                    <img
-                                        src={session.user.image}
-                                        alt={session.user.name || "User"}
-                                        className="w-10 h-10 rounded-full border-2 border-blue-500/50"
-                                    />
-                                )}
-                                <button
-                                    onClick={() => signOut()}
-                                    className="btn-secondary text-sm"
-                                >
-                                    Sign Out
-                                </button>
-                            </div>
-                        )}
                     </div>
                 </div>
             </div>

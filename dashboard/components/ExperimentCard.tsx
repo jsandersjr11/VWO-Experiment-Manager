@@ -1,6 +1,6 @@
 "use client";
 
-import { Star, TrendingUp, TrendingDown, Calendar, Users } from "lucide-react";
+import { Star, TrendingUp, Calendar, Users, Copy, ExternalLink } from "lucide-react";
 
 interface ExperimentCardProps {
     experiment: any;
@@ -17,119 +17,102 @@ export default function ExperimentCard({ experiment }: ExperimentCardProps) {
     );
 
     return (
-        <div className="glass-panel p-6 hover:border-blue-500/50 transition-all duration-300">
+        <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm hover:shadow-md transition-all duration-200 group">
             {/* Header */}
             <div className="flex items-start justify-between mb-4">
                 <div className="flex-1">
                     <div className="flex items-center gap-2 mb-2">
-                        <span className="text-xs font-mono text-gray-400">
-                            ID: {experiment.id}
-                        </span>
-                        <span
-                            className={`px-2 py-1 text-xs rounded-full ${experiment.status === "RUNNING"
-                                    ? "bg-green-500/20 text-green-400 border border-green-500/30"
-                                    : "bg-gray-500/20 text-gray-400 border border-gray-500/30"
-                                }`}
-                        >
-                            {experiment.status}
-                        </span>
+                        <h3 className="text-lg font-bold text-gray-900 group-hover:text-indigo-600 transition-colors">
+                            {experiment.name}
+                        </h3>
+                        {experiment.status === "RUNNING" && (
+                            <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-green-100 text-green-700 uppercase tracking-wide">
+                                Running
+                            </span>
+                        )}
                     </div>
-                    <h3 className="text-lg font-semibold text-white mb-1">
-                        {experiment.name}
-                    </h3>
-                    <p className="text-sm text-gray-400">
-                        {experiment.primaryGoal} ({experiment.goalType})
+                    <p className="text-sm text-gray-500 line-clamp-2 mb-3">
+                        {experiment.primaryGoal} ({experiment.goalType}) - ID: {experiment.id}
                     </p>
+
+                    {/* Tags */}
+                    <div className="flex flex-wrap gap-2">
+                        <span className="px-2 py-1 rounded bg-gray-100 text-gray-600 text-xs font-medium uppercase tracking-wide">
+                            {experiment.type}
+                        </span>
+                        <span className="px-2 py-1 rounded bg-indigo-50 text-indigo-600 text-xs font-medium uppercase tracking-wide">
+                            {experiment.variations.length} Variations
+                        </span>
+                    </div>
+                </div>
+
+                {/* Action Button */}
+                <button className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-gray-600 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 hover:text-gray-900 transition-colors">
+                    <Copy className="w-3.5 h-3.5" />
+                    Duplicate
+                </button>
+            </div>
+
+            {/* Divider */}
+            <div className="h-px bg-gray-100 my-4" />
+
+            {/* Metrics Summary */}
+            <div className="grid grid-cols-2 gap-4 mb-4">
+                <div>
+                    <p className="text-xs font-medium text-gray-500 mb-1">Total Visitors</p>
+                    <div className="flex items-baseline gap-1">
+                        <span className="text-lg font-bold text-gray-900">
+                            {experiment.dailyVisitors.toLocaleString()}
+                        </span>
+                        <span className="text-xs text-gray-400">/ day</span>
+                    </div>
+                </div>
+                <div>
+                    <p className="text-xs font-medium text-gray-500 mb-1">Top Variation</p>
+                    {bestVariation ? (
+                        <div className="flex items-baseline gap-2">
+                            <span className="text-lg font-bold text-green-600">
+                                {bestVariation.conversionRate.toFixed(2)}%
+                            </span>
+                            <span className="text-xs text-gray-400">CR</span>
+                        </div>
+                    ) : (
+                        <span className="text-sm text-gray-400">-</span>
+                    )}
                 </div>
             </div>
 
-            {/* Stats */}
-            <div className="grid grid-cols-2 gap-4 mb-4 pb-4 border-b border-white/10">
-                <div className="flex items-center gap-2">
-                    <Calendar className="w-4 h-4 text-blue-400" />
-                    <div>
-                        <p className="text-xs text-gray-400">Days Running</p>
-                        <p className="text-sm font-semibold text-white">
-                            {experiment.daysRunning}
-                        </p>
-                    </div>
-                </div>
-                <div className="flex items-center gap-2">
-                    <Users className="w-4 h-4 text-purple-400" />
-                    <div>
-                        <p className="text-xs text-gray-400">Daily Visitors</p>
-                        <p className="text-sm font-semibold text-white">
-                            {experiment.dailyVisitors}
-                        </p>
-                    </div>
-                </div>
-            </div>
-
-            {/* Variations */}
-            <div className="space-y-3">
-                <h4 className="text-sm font-medium text-gray-300">Variations</h4>
-                {experiment.variations.map((variation: any, index: number) => {
-                    const isBest =
-                        bestVariation && variation.name === bestVariation.name;
-                    const isPositive = variation.conversionRate > 0;
+            {/* Variations Preview */}
+            <div className="space-y-2">
+                {experiment.variations.slice(0, 2).map((variation: any, index: number) => {
+                    const isBest = bestVariation && variation.name === bestVariation.name;
 
                     return (
-                        <div
-                            key={index}
-                            className={`p-3 rounded-lg border ${variation.isControl
-                                    ? "bg-blue-500/10 border-blue-500/30"
-                                    : isBest
-                                        ? "bg-green-500/10 border-green-500/30"
-                                        : "bg-white/5 border-white/10"
-                                }`}
-                        >
-                            <div className="flex items-center justify-between mb-2">
-                                <div className="flex items-center gap-2">
-                                    {variation.isControl && (
-                                        <Star className="w-4 h-4 text-blue-400" />
-                                    )}
-                                    {isBest && !variation.isControl && (
-                                        <TrendingUp className="w-4 h-4 text-green-400" />
-                                    )}
-                                    <span className="text-sm font-medium text-white">
-                                        {variation.name}
-                                    </span>
-                                </div>
-                                <span
-                                    className={`text-sm font-semibold ${isPositive ? "text-green-400" : "text-gray-400"
-                                        }`}
-                                >
-                                    {variation.conversionRate.toFixed(2)}% CR
-                                </span>
+                        <div key={index} className="flex items-center justify-between text-sm">
+                            <div className="flex items-center gap-2">
+                                {variation.isControl ? (
+                                    <span className="w-1.5 h-1.5 rounded-full bg-gray-400" />
+                                ) : (
+                                    <span className={`w-1.5 h-1.5 rounded-full ${isBest ? "bg-green-500" : "bg-indigo-500"}`} />
+                                )}
+                                <span className="text-gray-600 truncate max-w-[150px]">{variation.name}</span>
                             </div>
-
-                            <div className="grid grid-cols-4 gap-2 text-xs">
-                                <div>
-                                    <p className="text-gray-400">Visitors</p>
-                                    <p className="font-medium text-white">
-                                        {variation.visitors.toLocaleString()}
-                                    </p>
-                                </div>
-                                <div>
-                                    <p className="text-gray-400">Orders</p>
-                                    <p className="font-medium text-white">{variation.orders}</p>
-                                </div>
-                                <div>
-                                    <p className="text-gray-400">Revenue</p>
-                                    <p className="font-medium text-white">
-                                        ${variation.revenue.toFixed(2)}
-                                    </p>
-                                </div>
-                                <div>
-                                    <p className="text-gray-400">RPV</p>
-                                    <p className="font-medium text-white">
-                                        ${variation.rpv.toFixed(2)}
-                                    </p>
-                                </div>
+                            <div className="flex items-center gap-3">
+                                <span className="font-medium text-gray-900">
+                                    {variation.conversionRate.toFixed(2)}%
+                                </span>
+                                <span className="text-xs text-gray-400 w-16 text-right">
+                                    ${variation.revenue.toFixed(0)}
+                                </span>
                             </div>
                         </div>
                     );
                 })}
+                {experiment.variations.length > 2 && (
+                    <p className="text-xs text-center text-gray-400 mt-2">
+                        + {experiment.variations.length - 2} more variations
+                    </p>
+                )}
             </div>
         </div>
     );

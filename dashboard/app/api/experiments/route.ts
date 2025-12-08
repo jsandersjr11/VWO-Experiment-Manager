@@ -17,8 +17,8 @@ function getVWOClient() {
     return vwoClient;
 }
 
-// Fetch experiments from VWO API
-async function fetchVWOExperiments() {
+// Fetch experiments from VWO API with status and type filtering
+async function fetchVWOExperiments(status: string = 'RUNNING', types: string[] = ['ab', 'multivariate', 'split_url']) {
     const accountId = process.env.VWO_ACCOUNT_ID;
     const apiToken = process.env.VWO_API_TOKEN;
 
@@ -26,12 +26,17 @@ async function fetchVWOExperiments() {
         throw new Error("VWO credentials not configured");
     }
 
+    // Helper function to add delay
+    const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+
     try {
-        // Fetch all campaigns with pagination
+        // Fetch all campaigns with pagination and filtering
         let allCampaigns: any[] = [];
         let offset = 0;
         let totalCount = 0;
-        const limit = 100; // Fetch 100 at a time
+        const limit = 100;
+
+        console.log(`Fetching campaigns with status: ${status}, types: ${types.join(',')}`);
 
         do {
             const campaignsResponse = await fetch(
@@ -52,26 +57,43 @@ async function fetchVWOExperiments() {
             const campaigns = campaignsData._data?.partialCollection || [];
             totalCount = campaignsData._data?.totalCount || 0;
 
-            allCampaigns = allCampaigns.concat(campaigns);
+            // Filter by status and type on client side
+            const filteredCampaigns = campaigns.filter((campaign: any) => {
+                const matchesStatus = campaign.status === status ||
+                    (status === 'PAUSED' && campaign.status === 'STOPPED') ||
+                    (status === 'DRAFT' && campaign.status === 'NOT_STARTED');
+                const matchesType = types.includes(campaign.type);
+                return matchesStatus && matchesType;
+            });
+
+            allCampaigns = allCampaigns.concat(filteredCampaigns);
             offset += campaigns.length;
 
-            console.log(`Fetched ${allCampaigns.length} of ${totalCount} campaigns`);
+            console.log(`Fetched ${offset} of ${totalCount} campaigns, ${allCampaigns.length} match filters`);
 
             // Break if we've fetched all campaigns
-            if (allCampaigns.length >= totalCount || campaigns.length === 0) {
+            if (offset >= totalCount || campaigns.length === 0) {
                 break;
             }
+
+            // Rate limiting delay between pagination requests
+            await sleep(1000);
         } while (true);
 
-        console.log(`Total campaigns fetched: ${allCampaigns.length}`);
+        console.log(`Total filtered campaigns: ${allCampaigns.length}`);
 
         // Fetch detailed data for each campaign (includes stats)
-        // Process in batches to avoid overwhelming the API
-        const batchSize = 10;
+        // Process in smaller batches with delays to avoid rate limiting
+        const batchSize = 5;
         const allExperiments: any[] = [];
 
         for (let i = 0; i < allCampaigns.length; i += batchSize) {
             const batch = allCampaigns.slice(i, i + batchSize);
+
+            // Add delay between batches to respect rate limits
+            if (i > 0) {
+                await sleep(2000);
+            }
 
             const batchResults = await Promise.all(
                 batch.map(async (campaign: any) => {
@@ -159,7 +181,7 @@ async function fetchVWOExperiments() {
             console.log(`Processed ${allExperiments.length} experiments so far...`);
         }
 
-        console.log(`Successfully loaded ${allExperiments.length} experiments with data`);
+        console.log(`Successfully loaded ${allExperiments.length} experiments with data for status: ${status}`);
 
         return allExperiments;
     } catch (error) {
@@ -211,10 +233,24 @@ function parseVariations(campaign: any, stats: any) {
     });
 }
 
-// Cache for experiments data
-let cachedData: any = null;
-let lastFetch: number = 0;
-const CACHE_DURATION = 60000; // 1 minute cache
+// Separate caches for each status
+interface CacheEntry {
+    data: any;
+    lastFetch: number;
+}
+
+const caches: Record<string, CacheEntry> = {
+    RUNNING: { data: null, lastFetch: 0 },
+    DRAFT: { data: null, lastFetch: 0 },
+    PAUSED: { data: null, lastFetch: 0 },
+};
+
+// Cache durations per status (in milliseconds)
+const CACHE_DURATIONS: Record<string, number> = {
+    RUNNING: 30 * 60 * 1000,  // 30 minutes
+    DRAFT: 60 * 60 * 1000,     // 1 hour
+    PAUSED: 2 * 60 * 60 * 1000, // 2 hours
+};
 
 export async function GET(request: Request) {
     try {
@@ -224,26 +260,48 @@ export async function GET(request: Request) {
             return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
         }
 
-        // Check cache
+        // Parse query parameters
+        const { searchParams } = new URL(request.url);
+        const status = searchParams.get("status") || "RUNNING";
+        const typesParam = searchParams.get("types") || "ab,multivariate,split_url";
+        const types = typesParam.split(",");
+
+        // Validate status
+        if (!["RUNNING", "DRAFT", "PAUSED"].includes(status)) {
+            return NextResponse.json(
+                { error: "Invalid status. Must be RUNNING, DRAFT, or PAUSED" },
+                { status: 400 }
+            );
+        }
+
+        // Check cache for this status
         const now = Date.now();
-        if (cachedData && now - lastFetch < CACHE_DURATION) {
+        const cache = caches[status];
+        const cacheDuration = CACHE_DURATIONS[status];
+
+        if (cache.data && now - cache.lastFetch < cacheDuration) {
+            console.log(`Returning cached data for status: ${status}`);
             return NextResponse.json({
-                experiments: cachedData,
+                experiments: cache.data,
                 cached: true,
-                lastUpdate: new Date(lastFetch).toISOString(),
+                status,
+                lastUpdate: new Date(cache.lastFetch).toISOString(),
             });
         }
 
         // Fetch fresh data
-        const experiments = await fetchVWOExperiments();
+        console.log(`Fetching fresh data for status: ${status}`);
+        const experiments = await fetchVWOExperiments(status, types);
 
-        cachedData = experiments;
-        lastFetch = now;
+        // Update cache for this status
+        cache.data = experiments;
+        cache.lastFetch = now;
 
         return NextResponse.json({
             experiments,
             cached: false,
-            lastUpdate: new Date(lastFetch).toISOString(),
+            status,
+            lastUpdate: new Date(cache.lastFetch).toISOString(),
         });
     } catch (error: any) {
         console.error("Error in experiments API:", error);
