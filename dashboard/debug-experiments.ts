@@ -1,10 +1,11 @@
-import { NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/app/api/auth/[...nextauth]/route";
+
 import fs from 'fs';
 import path from 'path';
-
+import dotenv from 'dotenv';
 const VWO = require("vwo-node-sdk");
+
+// Load envs
+dotenv.config({ path: '.env.local' });
 
 // Initialize VWO SDK
 let vwoClient: any = null;
@@ -33,7 +34,6 @@ function getLookerData() {
     }
 }
 
-// Fetch experiments from VWO API with status and type filtering
 async function fetchVWOExperiments(status: string = 'RUNNING', types: string[] = ['ab', 'multivariate', 'split_url']) {
     const accountId = process.env.VWO_ACCOUNT_ID;
     const apiToken = process.env.VWO_API_TOKEN;
@@ -62,7 +62,6 @@ async function fetchVWOExperiments(status: string = 'RUNNING', types: string[] =
                         "token": apiToken,
                         "Content-Type": "application/json",
                     },
-                    cache: 'no-store'
                 }
             );
 
@@ -74,7 +73,6 @@ async function fetchVWOExperiments(status: string = 'RUNNING', types: string[] =
             const campaigns = campaignsData._data?.partialCollection || [];
             totalCount = campaignsData._data?.totalCount || 0;
 
-            // Filter by status and type on client side
             const filteredCampaigns = campaigns.filter((campaign: any) => {
                 const matchesStatus = campaign.status === status ||
                     (status === 'PAUSED' && campaign.status === 'STOPPED') ||
@@ -88,99 +86,68 @@ async function fetchVWOExperiments(status: string = 'RUNNING', types: string[] =
 
             console.log(`Fetched ${offset} of ${totalCount} campaigns, ${allCampaigns.length} match filters`);
 
-            // Break if we've fetched all campaigns
             if (offset >= totalCount || campaigns.length === 0) {
                 break;
             }
 
-            // Rate limiting delay between pagination requests
-            await sleep(1000);
+            // await sleep(1000); // Reduced for debugging
         } while (true);
 
         console.log(`Total filtered campaigns: ${allCampaigns.length}`);
 
-        // Get Looker data to merge
         const lookerData = getLookerData();
         console.log(`Loaded Looker data entries: ${lookerData ? Object.keys(lookerData).length : 0}`);
 
-        // Fetch detailed data for each campaign (includes stats)
-        // Process in smaller batches with delays to avoid rate limiting
-        const batchSize = 2; // Reduced from 5 to avoid 429s
+        const batchSize = 5;
         const allExperiments: any[] = [];
 
         for (let i = 0; i < allCampaigns.length; i += batchSize) {
             const batch = allCampaigns.slice(i, i + batchSize);
 
-            // Add delay between batches to respect rate limits
-            if (i > 0) {
-                await sleep(2500); // Increased delay
-            }
-
             const batchResults = await Promise.all(
                 batch.map(async (campaign: any) => {
                     try {
-                        // Retry logic for flaky API
-                        let detailsResponse: Response | null = null;
-                        let retries = 3;
-                        while (retries > 0) {
-                            try {
-                                detailsResponse = await fetch(
-                                    `https://app.vwo.com/api/v2/accounts/${accountId}/campaigns/${campaign.id}`,
-                                    {
-                                        headers: {
-                                            "token": apiToken,
-                                            "Content-Type": "application/json",
-                                        },
-                                        cache: 'no-store'
-                                    }
-                                );
-                                if (detailsResponse.ok) break;
-                            } catch (e) {
-                                console.warn(`Attempt failed for ${campaign.id}, retries left: ${retries}`);
+                        const detailsResponse = await fetch(
+                            `https://app.vwo.com/api/v2/accounts/${accountId}/campaigns/${campaign.id}`,
+                            {
+                                headers: {
+                                    "token": apiToken,
+                                    "Content-Type": "application/json",
+                                },
                             }
-                            retries--;
-                            if (retries > 0) await sleep(2000);
-                        }
+                        );
 
-                        if (!detailsResponse || !detailsResponse.ok) {
-                            console.warn(`Failed to fetch details for campaign ${campaign.id} after retries`);
+                        if (!detailsResponse.ok) {
+                            console.warn(`Failed to fetch details for campaign ${campaign.id}`);
                             return null;
                         }
 
                         const detailsData = await detailsResponse.json();
                         const campaignDetails = detailsData._data;
 
-                        if (!campaignDetails) {
-                            console.warn(`No details data for campaign ${campaign.id}`);
-                            return null;
-                        }
-
-                        // Find primary goal
                         const primaryGoal = campaignDetails.goals?.find((g: any) => g.isPrimary) || campaignDetails.goals?.[0];
+
+                        // Debug: Log if primaryGoal is missing
+                        if (!primaryGoal) console.log(`No primary goal for ${campaign.id}`);
+                        else if (!primaryGoal.aggregatedData) console.log(`No aggregatedData for ${campaign.id}`);
 
                         if (!primaryGoal || !primaryGoal.aggregatedData) {
                             return null;
                         }
 
-                        // Calculate days running
                         const createdOn = new Date(campaignDetails.createdOn * 1000);
                         const now = new Date();
                         const daysRunning = Math.max(1, Math.round((now.getTime() - createdOn.getTime()) / (1000 * 60 * 60 * 24)));
 
-                        // Check if we have Looker data for this experiment
                         const experimentLookerData = lookerData && lookerData[campaign.id];
 
-                        // Parse variations
                         const variations = campaignDetails.variations.map((variation: any) => {
-                            // Default VWO data
                             let varStats = primaryGoal.aggregatedData[variation.id] || {};
                             let visitors = varStats.visitorCount || 0;
                             let conversions = varStats.conversionCount || 0;
                             let revenue = varStats.totalRevenue || 0;
 
-                            // OVERRIDE with Looker data if available
                             if (experimentLookerData && experimentLookerData.variations) {
-                                // Try to find match by Variation ID or Name
                                 const lookerVar = experimentLookerData.variations[variation.id] || experimentLookerData.variations[variation.name];
 
                                 if (lookerVar) {
@@ -205,7 +172,6 @@ async function fetchVWOExperiments(status: string = 'RUNNING', types: string[] =
                             };
                         }).filter((v: any) => v !== null);
 
-                        // Recalculate totals based on (potentially Looker-updated) variations
                         const totalVisitors = variations.reduce((sum: number, v: any) => sum + v.visitors, 0);
                         const dailyVisitors = Math.round(totalVisitors / daysRunning);
 
@@ -219,10 +185,6 @@ async function fetchVWOExperiments(status: string = 'RUNNING', types: string[] =
                             variations,
                             primaryGoal: primaryGoal.name || "Total Orders Revenue",
                             goalType: primaryGoal.type || "revenue",
-                            lookerSyncInfo: experimentLookerData ? {
-                                fileName: experimentLookerData.fileName,
-                                updatedAt: experimentLookerData.updatedAt
-                            } : null
                         };
                     } catch (error) {
                         console.error(`Error fetching details for campaign ${campaign.id}:`, error);
@@ -232,11 +194,7 @@ async function fetchVWOExperiments(status: string = 'RUNNING', types: string[] =
             );
 
             allExperiments.push(...batchResults.filter((exp) => exp !== null));
-            console.log(`Processed ${allExperiments.length} experiments so far...`);
         }
-
-        console.log(`Successfully loaded ${allExperiments.length} experiments with data for status: ${status}`);
-
         return allExperiments;
     } catch (error) {
         console.error("Error fetching VWO experiments:", error);
@@ -244,101 +202,7 @@ async function fetchVWOExperiments(status: string = 'RUNNING', types: string[] =
     }
 }
 
-function calculateDaysRunning(createdOn: string): number {
-    const created = new Date(createdOn);
-    const now = new Date();
-    const diffTime = Math.abs(now.getTime() - created.getTime());
-    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-    return diffDays;
-}
-
-function calculateDailyVisitors(stats: any): number {
-    if (!stats || !stats.variations) return 0;
-
-    const totalVisitors = stats.variations.reduce(
-        (sum: number, v: any) => sum + (v.visitors || 0),
-        0
-    );
-
-    const daysRunning = stats.duration_days || 1;
-    return Math.round(totalVisitors / daysRunning);
-}
-
-// Separate caches for each status
-interface CacheEntry {
-    data: any;
-    lastFetch: number;
-}
-
-const caches: Record<string, CacheEntry> = {
-    RUNNING: { data: null, lastFetch: 0 },
-    DRAFT: { data: null, lastFetch: 0 },
-    PAUSED: { data: null, lastFetch: 0 },
-};
-
-// Cache durations per status (in milliseconds)
-const CACHE_DURATIONS: Record<string, number> = {
-    RUNNING: 30 * 60 * 1000,  // 30 minutes
-    DRAFT: 60 * 60 * 1000,     // 1 hour
-    PAUSED: 2 * 60 * 60 * 1000, // 2 hours
-};
-
-export async function GET(request: Request) {
-    try {
-        // Check authentication
-        const session = await getServerSession(authOptions);
-        if (!session) {
-            return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-        }
-
-        // Parse query parameters
-        const { searchParams } = new URL(request.url);
-        const status = searchParams.get("status") || "RUNNING";
-        const typesParam = searchParams.get("types") || "ab,multivariate,split_url";
-        const types = typesParam.split(",");
-
-        // Validate status
-        if (!["RUNNING", "DRAFT", "PAUSED"].includes(status)) {
-            return NextResponse.json(
-                { error: "Invalid status. Must be RUNNING, DRAFT, or PAUSED" },
-                { status: 400 }
-            );
-        }
-
-        // Check cache for this status
-        const now = Date.now();
-        const cache = caches[status];
-        const cacheDuration = CACHE_DURATIONS[status];
-
-        if (cache.data && now - cache.lastFetch < cacheDuration) {
-            console.log(`Returning cached data for status: ${status}`);
-            return NextResponse.json({
-                experiments: cache.data,
-                cached: true,
-                status,
-                lastUpdate: new Date(cache.lastFetch).toISOString(),
-            });
-        }
-
-        // Fetch fresh data
-        console.log(`Fetching fresh data for status: ${status}`);
-        const experiments = await fetchVWOExperiments(status, types);
-
-        // Update cache for this status
-        cache.data = experiments;
-        cache.lastFetch = now;
-
-        return NextResponse.json({
-            experiments,
-            cached: false,
-            status,
-            lastUpdate: new Date(cache.lastFetch).toISOString(),
-        });
-    } catch (error: any) {
-        console.error("Error in experiments API:", error);
-        return NextResponse.json(
-            { error: error.message || "Failed to fetch experiments" },
-            { status: 500 }
-        );
-    }
-}
+// Run
+fetchVWOExperiments()
+    .then(() => console.log('Success!'))
+    .catch(err => console.error('FAILED:', err));

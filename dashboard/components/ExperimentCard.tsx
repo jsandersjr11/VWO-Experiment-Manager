@@ -1,6 +1,7 @@
 "use client";
 
 import { Star, TrendingUp, Calendar, Users, Copy, ExternalLink } from "lucide-react";
+import ExperimentDataUpload from "./ExperimentDataUpload";
 
 interface ExperimentCardProps {
     experiment: any;
@@ -47,10 +48,16 @@ export default function ExperimentCard({ experiment }: ExperimentCardProps) {
                 </div>
 
                 {/* Action Button */}
-                <button className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-gray-600 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 hover:text-gray-900 transition-colors">
-                    <Copy className="w-3.5 h-3.5" />
-                    Duplicate
-                </button>
+                <div className="flex items-center gap-2">
+                    <ExperimentDataUpload
+                        experimentId={experiment.id}
+                        initialSyncInfo={experiment.lookerSyncInfo}
+                    />
+                    <button className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-gray-600 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 hover:text-gray-900 transition-colors">
+                        <Copy className="w-3.5 h-3.5" />
+                        Duplicate
+                    </button>
+                </div>
             </div>
 
             {/* Divider */}
